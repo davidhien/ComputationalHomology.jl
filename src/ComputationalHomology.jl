@@ -24,7 +24,7 @@ export AbstractCell,
        boundary, coboundary, celltype, cells,
        SimplicialComplex, addsimplex!, addsimplices!,
        CWComplex,
-       vietorisrips, witness, cech, čech,
+       vietorisrips, vrfromdistances, witness, cech, čech,
 
        AbstractHomology, grouptype, group,
        Homology, homology, withgenerators, generators,

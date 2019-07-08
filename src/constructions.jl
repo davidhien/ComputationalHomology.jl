@@ -106,51 +106,59 @@ function vietorisrips(X::AbstractMatrix{T}, ɛ::Real, weights = true;
                       expansion = :incremental,
                       distance  = Distances.Euclidean(),
                       maxoutdim = size(X,2)-1) where T <: Real
-    d, n = size(X)
-
-    # add zero-dimensional simplices to complex
-    splxs = map(Simplex, 1:n)
-    cplx = SimplicialComplex(splxs...)
 
     # calculate cross distances for each point in dataset
     D = Distances.pairwise(distance, X, dims=2)
 
-    # build 1-skeleton (neighborhood graph)
-    E = spzeros(Bool, n, n) # adjacency matrix
-    for i in 1:n
-        E[i,i] = true
-        for j in findall(d-> 0 < d <= ɛ, view(D, :, i))
-            s = Simplex(i,j)
-            # check if simplex is already added
-            s in cplx && continue
-            # add simplex to complex
-            push!(cplx, s)
-            # fill adjacency matrix
-            E[i,j] = true
-            E[j,i] = true
-        end
-    end
+    return vrfromdistances(D, ɛ, weights, expansion, maxoutdim)
+end
 
-    # determine maximal dimension
-    kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
+function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true;
+                      expansion = :incremental,
+                      maxoutdim = -1) where T <: Real
+	n = size(D,1)
 
-    # calculate weights of nerve
-    w = nothing
-    if weights
-        w = Dict{Int, Vector{T}}()
-        w[0] = zeros(size(cplx,0))
-        if size(cplx, 1) > 0
-            w[1] = zeros(size(cplx,1))
-            for e in cells(cplx,1)
-                w[1][position(cplx, e)] = D[map(v->position(cplx, v), faces(e))...]
-            end
-        end
-    end
+	splxs = map(Simplex, 1:n)
+	cplx = SimplicialComplex(splxs...)
 
-    # perform expansion
-    expand(expansion, cplx, w, kmax, E)
+	E = spzeros(Bool, n, n) # adjacency matrix
+	for i in 1:n
+		E[i,i] = true
+		for j in findall(d-> 0 < d <= ɛ, view(D, :, i))
+			s = Simplex(i,j)
+			# check if simplex is already added
+			s in cplx && continue
+			# add simplex to complex
+			push!(cplx, s)
+			# fill adjacency matrix
+			E[i,j] = true
+			E[j,i] = true
+		end
+	end
 
-    return cplx, w
+	if maxoutdim == -1
+		kmax = maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1))
+	else
+		kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
+	end
+
+	# calculate weights of nerve
+	w = nothing
+	if weights
+		w = Dict{Int, Vector{T}}()
+		w[0] = zeros(size(cplx,0))
+		if size(cplx, 1) > 0
+			w[1] = zeros(size(cplx,1))
+			for e in cells(cplx,1)
+				w[1][position(cplx, e)] = D[map(v->position(cplx, v), faces(e))...]
+			end
+		end
+	end
+
+	expand(expansion, cplx, w, kmax, E)
+
+	return cplx, w
+
 end
 
 """
@@ -376,4 +384,3 @@ function čech(X::AbstractMatrix{T}, ɛ::Real, weights = true;
     return cplx, w
 end
 const cech = čech
-
