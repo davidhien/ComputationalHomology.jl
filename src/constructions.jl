@@ -113,7 +113,7 @@ function vietorisrips(X::AbstractMatrix{T}, ɛ::Real, weights = true;
     return vrfromdistances(D, ɛ, weights, expansion, maxoutdim)
 end
 
-function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true;
+function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true,
                       expansion = :incremental,
                       maxoutdim = -1) where T <: Real
 	n = size(D,1)
