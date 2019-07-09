@@ -65,3 +65,22 @@
 
     @test length(generators(g)) == 3
 end
+
+@testset "Homology2" begin
+    # data will contain all points {0,1}^d
+    d = 3
+    data = zeros(d,2^d)
+    for i = 0:2^d-1
+        s = bitstring(i)[end-d+1:end]
+        s = split(s,"")
+        s = parse.(Int,s)
+        data[:,i+1] = s
+    end
+
+    cplx, w = vietorisrips(data, sqrt(3), maxoutdim=3)
+    h = homology(cplx, Int)
+    g = withgenerators(h)
+    @test length(generators(g)[0]) == 1
+    @test length(generators(g)[1]) == 0
+    @test length(generators(g)[2]) == 0
+end
