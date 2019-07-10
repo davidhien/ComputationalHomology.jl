@@ -1,7 +1,7 @@
 module ComputationalHomology
 
 using LinearAlgebra
-import SparseArrays: SparseMatrixCSC, spzeros, sparse, findnz
+import SparseArrays: SparseMatrixCSC, spzeros, sparse, findnz, nnz
 import SmithNormalForm: smith
 import Distances
 import Random

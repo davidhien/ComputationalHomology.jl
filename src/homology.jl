@@ -112,23 +112,44 @@ function Base.iterate(g::WithGenerators, state=nothing)
 
     p, βₚ, τₚ = result[1]
     U, Uinv, V, Vinv, D, t = result[2][2]
+    # now U*D*V = D_p-1
+
     cplx = g.homology.complex
     trivial = t - τₚ
 
-    A = view(U, 1:size(U,1), t+1:size(U,2))
-    B = view(Uinv, t+1:size(Uinv,1), 1:size(Uinv,2))
-    C = if p == 0
-        n = size(cplx, p)
-        SparseMatrixCSC{GT}(I, n, n)
-    else
-        VinvPrev = state[2][4]
-        tPrev = state[2][6]
-        view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
-    end
 
-    P = A * (B * C)
+#    A = view(U, 1:size(U,1), t+1:size(U,2)) # complement of im(D1)
+#    B = view(Uinv, t+1:size(Uinv,1), 1:size(Uinv,2)) # inverse of A
+#    C = if p == 0
+#        n = size(cplx, p)
+#        SparseMatrixCSC{GT}(I, n, n)
+#    else
+#        VinvPrev = state[2][4]
+#        tPrev = state[2][6]
+#        view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
+#    end # basis for cycles
+
+    Ainv,A = if p == 0
+            n = size(cplx, p)
+            SparseMatrixCSC{GT}(I,n,n),SparseMatrixCSC{GT}(I,n,n)
+        else
+            Vprev = state[2][3]
+            VinvPrev = state[2][4]
+            tPrev = state[2][6]
+            if size(Vprev,1) - tPrev+1 == 0
+                n = size(cplx, p)
+                SparseMatrixCSC{GT}(I,n,n),SparseMatrixCSC{GT}(I,n,n)
+            else
+                view(Vprev, tPrev+1:size(Vprev,1), 1:size(Vprev,2)),view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
+            end
+        end
+    B = view(U, 1:size(U,1), 1:nnz(D))
+
+    P =  Ainv * B # A * (B * C) #this probably is not correct
     F = smith(P)
-    G = F.S * diagm(F)
+    G = A * F.S[:, nnz(diagm(F))+1:end]
+    # NOTE: G is already incorrect. trouble has already started
+
 
     # betti generator
     for j in 1:size(G,2)

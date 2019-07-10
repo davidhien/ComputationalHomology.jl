@@ -84,3 +84,11 @@ end
     @test length(generators(g)[1]) == 0
     @test length(generators(g)[2]) == 0
 end
+
+@testset "Homology3" begin
+    cplx = SimplicialComplex(Simplex(1,2), Simplex(2,3), Simplex(3,1))
+    h = homology(cplx, Int)
+    g = withgenerators(h)
+    @test length(generators(g)[0]) == 1
+    @test length(generators(g)[1]) == 1
+end
