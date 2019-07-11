@@ -83,6 +83,7 @@ end
     @test length(generators(g)[0]) == 1
     @test length(generators(g)[1]) == 0
     @test length(generators(g)[2]) == 0
+    @test length(generators(g)[3]) == 0
 end
 
 @testset "Homology3" begin
@@ -91,4 +92,25 @@ end
     g = withgenerators(h)
     @test length(generators(g)[0]) == 1
     @test length(generators(g)[1]) == 1
+end
+
+@testset "Homology4" begin
+    d = 2
+    square = zeros(d,2^d)
+    for i = 0:2^d-1
+        s = bitstring(i)[end-d+1:end]
+        s = split(s,"")
+        s = parse.(Int,s)
+        square[:,i+1] = s
+    end
+    square1 = [square square .+ [1;0] square .+ [2;0] square .+ [3;0]]#
+    square2 = [square .+ [0;1] square .+ [3;1] square .+ [0;2] square .+ [3;2]]
+    square3 = square1 .+ [0;3]
+    data = [square1 square2 square3]
+    data = unique(data, dims=2)
+
+    cplx,w = vietorisrips(data, sqrt(2), maxoutdim=2)
+    h = homology(cplx,Int)
+    g = withgenerators(h)
+    @test ComputationalHomology.betti(h) == [1;1;0]
 end
