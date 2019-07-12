@@ -14,48 +14,6 @@ pkg> add https://github.com/wildart/SmithNormalForm.jl.git#0.2.1
 pkg> add https://github.com/wildart/ComputationalHomology.jl.git#0.2.0
 ```
 
-For Julia 1.1+, add [BoffinStuff](https://github.com/wildart/BoffinStuff.git) registry in package manager, and proceed installation:
-
-```
-pkg> registry add https://github.com/wildart/BoffinStuff.git
-pkg> add ComputationalHomology
-```
-
-## Features
-
-- Cells
-
-    - Simplex
-    - Cube
-    - CW
-
-- Chains for specified PID
-
-- Complexes
-
-    - Simplicial
-    - CW
-
-- Filtrations
-
-- Constructions
-
-    - Čech
-    - Vietoris-Rips
-    - Witness
-
-- Homology
-
-    - Simplicial
-    - Persistent
-
-- Persistence
-
-    - Barcode
-    - Persistence Landscape
-    - Persistence Image
-
-
 ## Example
 ```julia
 
@@ -78,7 +36,3 @@ julia> group(ph, 0) # calculate 0-homology group
 julia> group(ph, 1) # calculate 1-homology group
 3
 ```
-
-## TODO
-- [ ] Distances for persistance diagrams
-- [ ] Landscape standard deviation

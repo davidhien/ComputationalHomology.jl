@@ -48,27 +48,16 @@
         @test w === nothing
     end
 
-    @testset "Vietoris-Rips Complex" begin
+    @testset "Vietoris–Rips Complex" begin
 
-        @testset for expansion in [:inductive, :incremental]
-            cplx, w = vietorisrips(Y', 11.; maxoutdim = 1, expansion=expansion)
-            @test size(cplx, 0) == 7
-            @test size(cplx, 1) == 11
-            @test length(cplx) == 18
+        cplx, w = vietorisrips(Y', 12.; maxoutdim = 1)
+        @test sum(size(cplx)) == 18
 
-            f = filtration(cplx, w)
-            @testset "Test from Gudhi" for ((v,ls), d) in
-                zip(simplices(f),
-                    [0. 5. 5.38516 5.83095 6.08276 6.32456 6.7082 7.28011 8.94427 9.43398 9.48683 11])
-                @test v ≈ d atol=1e-4
-            end
-
-            cplx, w = vietorisrips(Y', 11.; expansion=expansion)
-            @test length(cplx) == 24
-            @test cplx.cells[3][1] == Simplex(1,2,3,4)
-            @test w[3][1] ≈ 9.43398 atol=1e-4
-            @test cplx.cells[1][8] == Simplex(4,7)
-            @test w[1][8] == 11.0
+        f = filtration(cplx, w)
+        @testset "Test from Gudhi" for ((v,ls), d) in
+            zip(simplices(f),
+                [0. 5. 5.38516 5.83095 6.08276 6.32456 6.7082 7.28011 8.94427 9.43398 9.48683 11])
+            @test v ≈ d atol=1e-4
         end
 
         cplx, w = vietorisrips(X, 0.1, false)
@@ -79,15 +68,15 @@
         cplx, w = vietorisrips(X, 0.3, false)
         @test size(cplx, 0) == N
         @test size(cplx, 1) == 4
-        @test cells(cplx, 1)[1] == Simplex(1, 10)
+        @test cplx[1,1] == Simplex(1, 10)
         @test w === nothing
 
         cplx, w = vietorisrips(X, 0.4)
         @test size(cplx, 0) == N
         @test size(cplx, 1) == 8
-        @test cells(cplx, 1)[1] == Simplex(1, 10)
+        @test cplx[1,1] == Simplex(1, 10)
         @test size(cplx, 2) == 1
-        @test cells(cplx, 2)[1] == Simplex(2, 4, 6)
+        @test cplx[1,2] == Simplex(2, 4, 6)
         @test w[0][1] == 0.
         @test w[1][1] ≈ 0.24932439624731
         @test w[2][1] ≈ 0.36949278019681

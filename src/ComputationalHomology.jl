@@ -1,30 +1,28 @@
 module ComputationalHomology
 
 using LinearAlgebra
-import SparseArrays: SparseMatrixCSC, spzeros, sparse, findnz, nnz
+using SparseArrays
 import SmithNormalForm: smith
 import Distances
 import Random
 import BoundingSphere
 import Statistics: mean
 
-import Base: ==, -, +, *, union, values, hash
+import Base: ==, -, +, *
 import Base.Iterators: pairs
 
 export AbstractCell,
        dim, faces, volume,
-       AbstractSimplex,
-       values, vertices,
-       Simplex, Cube, Cell,
+       Simplex, Cube,
 
        AbstractChain,
-       Chain, simplify,
+       setdim!, simplify,
+       Chain,
 
        AbstractComplex,
-       boundary, coboundary, celltype, cells,
-       SimplicialComplex, addsimplex!, addsimplices!,
-       CWComplex,
-       vietorisrips, vrfromdistances, witness, cech, čech,
+       boundary, coboundary, celltype, cells, boundary_matrix,
+       SimplicialComplex,
+       vietorisrips, witness, cech, čech,
 
        AbstractHomology, grouptype, group,
        Homology, homology, withgenerators, generators,
@@ -36,21 +34,16 @@ export AbstractCell,
        pairs, intervals, reduce!, reduce,
        PersistentHomology, persistenthomology,
 
-       Interval, Landscape, landscape, mean,
-       PersistentImage
+       Interval, Landscape, landscape, mean
 
 include("cells.jl")
 include("chain.jl")
 include("complex.jl")
 include("simplicial.jl")
-include("cw.jl")
-include("cube.jl")
 include("constructions.jl")
 include("filtration.jl")
 include("homology.jl")
 include("persistence.jl")
 include("landscape.jl")
-include("pimage.jl")
-include("examples.jl")
 
 end # module

@@ -15,7 +15,7 @@
     #######
     # from "Computational Topology - An Introduction" by Edelsbrunner & Harer, p. 184
     #######
-    flt = Filtration(SimplicialComplex{Simplex{Int}}, Int)
+    flt = Filtration(SimplicialComplex{Int}, Int)
     splxs=[ Simplex(1) => 1,
             Simplex(2) => 2,
             Simplex(3) => 3,
@@ -43,7 +43,7 @@
     #######
     # from "Topology for Computing" by Zomorodian, pp.138-145
     #######
-    flt = Filtration(SimplicialComplex{Simplex{Char}}, Int)
+    flt = Filtration(SimplicialComplex{Char}, Int)
     splxs=[ Simplex('a') => 0,
             Simplex('b') => 0,
             Simplex('c') => 1,
@@ -69,7 +69,7 @@
     #######
     # Ex.1
     #######
-    flt = Filtration(SimplicialComplex{Simplex{Int}}, Int)
+    flt = Filtration(SimplicialComplex{Int}, Int)
     splxs=[ Simplex(1) => 0,
             Simplex(2) => 0,
             Simplex(3) => 0,
@@ -99,7 +99,7 @@
     #######
     # Ex.2
     #######
-    flt = Filtration(SimplicialComplex{Simplex{Int}}, Float64)
+    flt = Filtration(SimplicialComplex{Int}, Float64)
     splxs=[ Simplex(1) => 1.0,
             Simplex(2) => 2.0,
             Simplex(3) => 3.0,
@@ -119,7 +119,7 @@
     @test length(flt) == 12
 
     # Betti numbers
-    ∂ = boundary(flt)
+    ∂ = boundary_matrix(flt)
     @test sparse(∂)[5,11] == 5
     @test length(∂[9]) > 0
     R = reduce(StandardReduction, ∂)
@@ -141,7 +141,7 @@
     @test_throws AssertionError group(ph, 3)
 
     # PH iterator
-    @testset "Method Comparison" for (g1, g2) in zip(homology(complex(flt), Int), persistenthomology(TwistReduction, flt))
+    @testset "Method Comparison" for (g1, g2) in zip(homology(complex(flt)), persistenthomology(TwistReduction, flt))
         @test g1[1] == g2[1]
         @test g1[2] == g2[2]
     end

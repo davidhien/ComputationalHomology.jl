@@ -1,34 +1,30 @@
 """Find all neighbors of vertex `u`` within `G` that precede it in the given ordering"""
-function lowernbrs(G::AbstractComplex, uidx::IX, E) where {IX <: Integer}
-    upos = position(G, uidx, 0)
-    nbrs = Set{IX}()
-    # get all edges of u: select {v} s.t. u > v for all edges {u,v}
-    for v in cells(G,0)
-        vidx = hash(v)
-        vpos = position(G, vidx, 0)
-        upos > vpos && E[vpos, upos] && push!(nbrs, vidx)
-    end
-    return nbrs
+function lowernbrs(cplx, u, E)
+    # get all edges of u
+    uval = first(u[:values])
+    uidx = u[:index]
+    # select {v} s.t. u > v for all edges {u,v}
+    !any(E[:,uval]) && return celltype(cplx)[]
+    return filter(v->v[:index] < uidx && E[first(v[:values]),uval], cells(cplx,0))
 end
 
-"""Inductive construction of VR complex from neighborhood graph"""
+"""Incremental construction of VR complex from neighborhood graph"""
 function inductive!(cplx, k, E)
-    C0 = cells(cplx, 0)
-    for i in 1:k-1
+    for i in 1:k
         cls = cells(cplx, i)
         cls === nothing && continue
-        for τ in cls
-            # N = ∩ᵤₜlowernbrs(G,u)
-            V = vertices(τ)
-            N = lowernbrs(cplx, V[1], E)
-            for i in 2:length(V)
-                intersect!(N, lowernbrs(cplx, V[i], E))
+        for τ in cells(cplx, i)
+            N = celltype(cplx)[]
+            τvals = τ[:values]
+            for (j, uval) in enumerate(τvals)
+                uidx = cplx[Simplex(uval), 0]
+                u = cplx[uidx, 0]
+                N = j == 1 ? lowernbrs(cplx, u, E) : intersect(N, lowernbrs(cplx, u, E))
             end
-            #K ⟵ K ∪ {τ ∪ {v}}
-            for vidx in N
-                vpos = position(cplx, vidx, 0)
-                σ = τ ∪ C0[vpos]
-                push!(cplx, σ)
+            for v in N
+                first(v[:values]) in τvals && continue
+                σ = Simplex(τvals..., v[:values]...)
+                cplx[σ] > size(cplx, i+1) && push!(cplx, σ)
             end
         end
     end
@@ -37,15 +33,16 @@ end
 """Add all simplices of the `k`-skeleton whose maximal vertex is `τ`"""
 function addcofaces!(cplx, k, τ, N, E)
     # V ← V ∪ {τ}
-    τ ∉ cplx && addsimplex!(cplx, τ)
+    τdim = dim(τ)
+    cplx[τ, τdim] > size(cplx, τdim) && push!(cplx, τ)
     # stop recursion
     dim(τ) >= k && return
-    for vidx in N
+    τvals = τ[:values]
+    for v in N
+        first(v[:values]) in τvals && continue
         # σ ← τ ∪ {v}
-        vpos = position(cplx, vidx, 0)
-        σ = τ ∪ cells(cplx, 0)[vpos]
-        # M ← N ∩ lowernbrs(G, v)
-        M = intersect(N, lowernbrs(cplx, vidx, E))
+        σ = Simplex(τvals..., v[:values]...)
+        M = intersect(N, lowernbrs(cplx, v, E))
         addcofaces!(cplx, k, σ, M, E)
     end
 end
@@ -54,7 +51,7 @@ end
 function incremental!(cplx, k, E)
     # construct VR complex
     for u in cells(cplx, 0)
-        N = lowernbrs(cplx, hash(u), E)
+        N = lowernbrs(cplx, u, E)
         addcofaces!(cplx, k, u, N, E)
     end
 end
@@ -63,8 +60,8 @@ end
 function weight(σ, w, cplx)
     k = dim(σ)
     k == 0 && return 0.
-    k == 1 && return w[1][cplx[σ]]
-    return maximum([w[k-1][position(cplx, τ)] for τ in faces(σ)])
+    k == 1 && return w[1][cplx[σ, 1]]
+    return maximum([w[k-1][cplx[τ, k-1]] for τ in faces(σ)])
 end
 
 function expand(method, cplx, w, kmax, E)
@@ -81,7 +78,7 @@ function expand(method, cplx, w, kmax, E)
         for k in 2:dim(cplx)
             w[k] = zeros(size(cplx,k))
             for σ in cells(cplx,k)
-                w[k][position(cplx, σ)] = weight(σ, w, cplx)
+                w[k][σ[:index]] = weight(σ, w, cplx)
             end
         end
     end
@@ -106,59 +103,54 @@ function vietorisrips(X::AbstractMatrix{T}, ɛ::Real, weights = true;
                       expansion = :incremental,
                       distance  = Distances.Euclidean(),
                       maxoutdim = size(X,2)-1) where T <: Real
+    d, n = size(X)
+
+    # add zero-dimensional simplices to complex
+    splxs = map(Simplex, 1:n)
+    cplx = SimplicialComplex(splxs...)
 
     # calculate cross distances for each point in dataset
-    D = Distances.pairwise(distance, X, dims=2)
+    D = Distances.pairwise(distance, X)
 
-    return vrfromdistances(D, ɛ, weights, expansion, maxoutdim)
-end
+    # build 1-skeleton (neighborhood graph)
+    E = spzeros(Bool, n, n) # adjacency matrix
+    for σ in cells(cplx, 0)
+        u = σ[:values]
+        Du = view(D, :, u)
+        edges = (LinearIndices(Du))[findall(d->d <= ɛ && d > 0., Du)]
+        length(edges) == 0 && continue
+        for i in edges
+            v = cplx[i, 0][:values]
+            s = Simplex(u...,v...)
+            if cplx[s] > size(cplx, 1)
+                # add simplex to complex
+                push!(cplx, s)
+                # fill adjacency matrix
+                E[s[:values], s[:values]] .= true
+            end
+        end
+    end
 
-function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true,
-                      expansion = :incremental,
-                      maxoutdim = -1) where T <: Real
-	n = size(D,1)
+    # determine maximal dimension
+    kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
 
-	splxs = map(Simplex, 1:n)
-	cplx = SimplicialComplex(splxs...)
+    # calculate weights of nerve
+    w = nothing
+    if weights
+        w = Dict{Int, Vector{T}}()
+        w[0] = zeros(size(cplx,0))
+        if size(cplx, 1) > 0
+            w[1] = zeros(size(cplx,1))
+            for e in cells(cplx,1)
+                w[1][e[:index]] = D[e[:values]...]
+            end
+        end
+    end
 
-	E = spzeros(Bool, n, n) # adjacency matrix
-	for i in 1:n
-		E[i,i] = true
-		for j in findall(d-> 0 < d <= ɛ, view(D, :, i))
-			s = Simplex(i,j)
-			# check if simplex is already added
-			s in cplx && continue
-			# add simplex to complex
-			push!(cplx, s)
-			# fill adjacency matrix
-			E[i,j] = true
-			E[j,i] = true
-		end
-	end
+    # perform expansion
+    expand(expansion, cplx, w, kmax, E)
 
-	if maxoutdim == -1
-		kmax = maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1))
-	else
-		kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
-	end
-
-	# calculate weights of nerve
-	w = nothing
-	if weights
-		w = Dict{Int, Vector{T}}()
-		w[0] = zeros(size(cplx,0))
-		if size(cplx, 1) > 0
-			w[1] = zeros(size(cplx,1))
-			for e in cells(cplx,1)
-				w[1][position(cplx, e)] = D[map(v->position(cplx, v), faces(e))...]
-			end
-		end
-	end
-
-	expand(expansion, cplx, w, kmax, E)
-
-	return cplx, w
-
+    return cplx, w
 end
 
 """
@@ -210,14 +202,14 @@ For parameter ν = 0, 1, 2 determines size of landmark radius.
 """
 function witness(X::AbstractMatrix{T}, l::Int, ɛ::Real, weights = true;
                  landmark = :minmax, distance = Distances.Euclidean(),
-                 expansion = :incremental, ν::Int = 2, maxoutdim = size(X,1)-1,
+                 expansion = :incremental, ν::Int = 2, maxoutdim = size(X,2)-1,
                  firstpoint = 0) where T <: Real
 
     # get landmarks
     L = landmarks(X, l, method = landmark, distance = distance, firstpoint=firstpoint)
 
     # get distances to landmarks
-    D = Distances.pairwise(distance, X[:,L], X, dims=2)
+    D = Distances.pairwise(distance, X[:,L], X)
 
     # simplexes contain indexes to landamarks
     cplx, w = witness(D, ɛ, weights, expansion=expansion, ν=ν, maxoutdim=maxoutdim, firstpoint=firstpoint)
@@ -364,7 +356,7 @@ function čech(X::AbstractMatrix{T}, ɛ::Real, weights = true;
             # add simplex in radius less then maximal filtration value
             if r <= ε
                 s = Simplex(reverse(idx))
-                addsimplex!(cplx, s)
+                addsimplex(cplx, s)
                 weights && push!(w[h], r)
             end
 
@@ -384,3 +376,4 @@ function čech(X::AbstractMatrix{T}, ɛ::Real, weights = true;
     return cplx, w
 end
 const cech = čech
+

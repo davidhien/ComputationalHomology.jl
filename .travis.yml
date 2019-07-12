@@ -2,7 +2,7 @@ language: julia
 os:
   - linux
 julia:
-  - 1.1
+  - 1.0
   - nightly
 notifications:
   email: false
@@ -10,8 +10,5 @@ matrix:
   allow_failures:
     - julia: nightly
 sudo: false
-before_script:
-  - julia -e 'using Pkg; Registry.add("General"); Registry.add(RegistrySpec(url="https://github.com/wildart/BoffinStuff.git"))'
 after_success:
   - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Coveralls.submit(Coveralls.process_folder())'
-

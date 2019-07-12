@@ -23,10 +23,10 @@ pair(i::Interval) = i.b => i.d
 intervals(d::Int, ps::Pair...) = [Interval(d, p) for p in ps]
 
 # Boundary matrix reduction algorithms
-lastindex(col::AbstractSet) = length(col) == 0 ? -1 : maximum(col)
+lastindex(col::BitSet) = length(col) == 0 ? -1 : last(col)
 
 """Standart reduction"""
-function reduce!(::Type{StandardReduction}, ∂::Vector{<:AbstractSet})
+function reduce!(::Type{StandardReduction}, ∂::Vector{BitSet})
     lowest_one_lookup = fill(-1, length(∂))
     for col in eachindex(∂)
         lowest_one = lastindex(∂[col])
@@ -43,7 +43,7 @@ function reduce!(::Type{StandardReduction}, ∂::Vector{<:AbstractSet})
 end
 
 """Twist reduction"""
-function reduce!(::Type{TwistReduction}, ∂::Vector{<:AbstractSet})
+function reduce!(::Type{TwistReduction}, ∂::Vector{BitSet})
     lowest_one_lookup = fill(-1, length(∂))
 
     for dim in maximum(map(length, ∂)):-1:1
@@ -64,11 +64,11 @@ function reduce!(::Type{TwistReduction}, ∂::Vector{<:AbstractSet})
     return ∂
 end
 
-Base.reduce(::Type{R}, ∂::Vector{<:AbstractSet}) where {R<:AbstractPersistenceReduction} = reduce!(R, deepcopy(∂))
+Base.reduce(::Type{R}, ∂::Vector{BitSet}) where {R<:AbstractPersistenceReduction} = reduce!(R, deepcopy(∂))
 
-function generate_pairs(∂::Vector{<:AbstractSet}; reduced = false)
+function generate_pairs(∂::Vector{BitSet}; reduced = false)
     ridx = reduced ? 1 : 0
-    births = eltype(∂)()
+    births = BitSet()
     ps = Pair[]
     for i in eachindex(∂)
         if length(∂[i]) > 0
@@ -88,12 +88,12 @@ function generate_pairs(∂::Vector{<:AbstractSet}; reduced = false)
 end
 
 "Compute raw persistence pairs (boundary matrix is reduced in a process)"
-function pairs(::Type{R}, ∂::Vector{<:AbstractSet}; reduced = false) where {R <: AbstractPersistenceReduction}
+function pairs(::Type{R}, ∂::Vector{BitSet}; reduced = false) where {R <: AbstractPersistenceReduction}
     reduce!(R, ∂) # reduce  boundary matrix
     return generate_pairs(∂, reduced=reduced), ∂  # generate pairs
 end
 pairs(::Type{R}, flt::Filtration; reduced = false) where {R <: AbstractPersistenceReduction} =
-    pairs(R, boundary(flt, reduced = reduced), reduced = reduced)
+    pairs(R, boundary_matrix(flt, reduced = reduced), reduced = reduced)
 
 """Return persistent diagram (birth-death pairs) per dimension."""
 function intervals(flt::Filtration, R::Vector, length0=false, absolute=true)
@@ -101,14 +101,14 @@ function intervals(flt::Filtration, R::Vector, length0=false, absolute=true)
     intrs = Dict{Int,Vector{Interval}}()
 
     # compute intervals
-    births = Set{Int}()
+    births = BitSet()
     ord = order(flt)
     for (i, (sdim, si, fv)) in enumerate(ord)
         col = R[i]
         if length(col) == 0
             push!(births, i)
         else
-            b = lastindex(col)
+            b = last(col)
             d = i
             delete!(births, b)
             delete!(births, d)
@@ -133,7 +133,7 @@ function intervals(flt::Filtration, R::Vector, length0=false, absolute=true)
 end
 
 intervals(flt::Filtration; reduction=TwistReduction, length0=false, absolute=true) =
-    intervals(flt, reduce!(reduction, boundary(flt)), length0, absolute)
+    intervals(flt, reduce!(reduction, boundary_matrix(flt)), length0, absolute)
 
 "Calculate persistent Betti numbers for a filtration complex of dimension `dim`"
 function betti(flt::Filtration, R::Vector, p::Int)
@@ -153,7 +153,7 @@ function betti(flt::Filtration, R::Vector, p::Int)
     return β < 0 ? 0 : β
 end
 betti(flt::Filtration, p::Int; reduction=TwistReduction) =
-    betti(flt, reduce!(reduction, boundary(flt)), p)
+    betti(flt, reduce!(reduction, boundary_matrix(flt)), p)
 
 """
 Persistent homology group iterator for a filtration
@@ -161,16 +161,19 @@ Persistent homology group iterator for a filtration
 mutable struct PersistentHomology <: AbstractHomology
     filtration::Filtration
     reduction::DataType
-    R::Vector{<:AbstractSet}
+    R::Vector{BitSet}
 end
 function persistenthomology(::Type{R}, flt::Filtration;
                             reduced::Bool=false) where R<:AbstractPersistenceReduction
-    RM = reduce!(R, boundary(flt, reduced = reduced))
+    RM = reduce!(R, boundary_matrix(flt, reduced = reduced))
     return PersistentHomology(flt, R, RM)
 end
 persistenthomology(flt::Filtration) = persistenthomology(TwistReduction, flt)
 
 Base.show(io::IO, h::PersistentHomology) = print(io, "PersistentHomology[$(h.filtration) with $(h.reduction)]")
+
+"""Return homology group type: dimension & Betti numbers."""
+Base.eltype(::Type{PersistentHomology}) = Tuple{Int, Int}
 
 #
 # Interface methods
@@ -184,10 +187,7 @@ intervals(h::PersistentHomology) = intervals(h.filtration, reduction=h.reduction
 #
 
 Base.length(h::PersistentHomology) = dim(h.filtration.complex)+1
-
-"""Return homology group type: dimension & Betti numbers."""
 Base.eltype(h::PersistentHomology) = Tuple{Int, Int}
-
 function Base.iterate(h::PersistentHomology, p=0)
     p > dim(h.filtration.complex) && return nothing
     βₚ = group(h, p)

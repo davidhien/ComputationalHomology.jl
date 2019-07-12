@@ -2,30 +2,34 @@
 
 abstract type AbstractHomology end
 grouptype(::Type{AbstractHomology}) = Nothing
-# grouptype(::Type{H}) where {H <: AbstractHomology} = grouptype(supertype(H))
+grouptype(::Type{H}) where {H <: AbstractHomology} = supertype(H) |> grouptype
 group(h::AbstractHomology, dim::Int; kw...) = throw(MethodError(group,(typeof(h),Int)))
 
 """
 Homology group iterator for an abstract complex
 """
-struct Homology{C<:AbstractComplex, PID} <: AbstractHomology
+struct Homology{C<:AbstractComplex, G} <: AbstractHomology
     complex::C
 end
-homology(c::C, ::Type{PID}) where {C<:AbstractComplex, PID} = Homology{C, PID}(c)
+homology(c::C, ::Type{G}) where {C <: AbstractComplex,G} = Homology{C,G}(c)
+homology(c::C) where {C <: AbstractComplex} = homology(c, Int)
 
-Base.show(io::IO, h::Homology{C, PID}) where {C<:AbstractComplex, PID} = print(io, "Homology($PID)[$(h.complex)]")
+grouptype(::Type{Homology{C,G}}) where {C,G} = G
+
+Base.show(io::IO, h::Homology) = print(io, "Homology[$(h.complex)]")
+
+"""Return homology group type: dimension, Betti & torsion numbers."""
+Base.eltype(::Type{Homology{C,G}}) where {C,G} = Tuple{Int, Int, Int}
 
 #
 # Interface methods
 #
 
-grouptype(::Type{Homology{C, PID}}) where {C<:AbstractComplex, PID} = PID
-
-function group(h::Homology{C, PID}, p::Int; Dₚ::Int=0) where {C<:AbstractComplex, PID}
+function group(h::Homology{C, G}, p::Int; Dₚ::Int=0) where {C <: AbstractComplex, G}
     cdim = dim(h.complex)
     @assert cdim >= p "Cannot define $p-th homology group for $cdim-dimensional complex"
 
-    M = boundary(h.complex, p+1, PID)
+    M = boundary_matrix(G, h.complex, p+1)
     F = smith(M)
     D = diagm(F)
 
@@ -37,13 +41,13 @@ function group(h::Homology{C, PID}, p::Int; Dₚ::Int=0) where {C<:AbstractCompl
 
     # Calculate rank B_p = rank D_{p+1}
     for i in 1:nₚ₊₁
-        D[i,i] == zero(PID) && break
+        D[i,i] == zero(G) && break
         Dₚ₊₁ += 1
     end
 
     # rank of torsion-free subgroup
     for i in 1:min(nₚ, nₚ₊₁)
-        if D[i,i] == one(PID) || D[i,i] == -one(PID)
+        if D[i,i] == one(G) || D[i,i] == -one(G)
            trivial += 1
         end
     end
@@ -58,14 +62,13 @@ end
 #
 # Iterator methods
 #
-"""Return homology group type: dimension, Betti & torsion numbers."""
-Base.eltype(h::Homology) = Tuple{Int, Int, Int}
 
-Base.length(h::Homology) = dim(h.complex)+1
+Base.length(h::Homology{C, G}) where {C,G} = dim(h.complex)+1
+Base.eltype(h::Homology{C, G}) where {C,G} = Tuple{Int,Int,Int}
 
-function Base.iterate(h::Homology{C, PID}, state=nothing) where {C<:AbstractComplex, PID}
+function Base.iterate(h::Homology{C, G}, state=nothing) where {C,G}
     if state === nothing
-        Z = zeros(PID,0,0)
+        Z = zeros(G,0,0)
         snfstate = (Z,Z,Z,Z,Z,0)
         return iterate(h, (0, snfstate))
     end
@@ -93,6 +96,7 @@ Returns homology group parameters from iterator `hom` and generators as pair of 
 When **k** is zero, then **x** is a boundary without any coefficient.
 """
 withgenerators(h::H) where {H <: AbstractHomology} = WithGenerators{H}(h)
+Base.eltype(::Type{WithGenerators{H}}) where {H <: AbstractHomology} = Tuple{Int, Int, Int, Dict{Chain, grouptype(H)}}
 
 #
 # Iterator methods
@@ -112,44 +116,23 @@ function Base.iterate(g::WithGenerators, state=nothing)
 
     p, βₚ, τₚ = result[1]
     U, Uinv, V, Vinv, D, t = result[2][2]
-    # now U*D*V = D_p-1
-
     cplx = g.homology.complex
     trivial = t - τₚ
 
+    A = view(U, 1:size(U,1), t+1:size(U,2))
+    B = view(Uinv, t+1:size(Uinv,1), 1:size(Uinv,2))
+    C = if p == 0
+        n = size(cplx, p)
+        SparseMatrixCSC{GT}(I, n, n)
+    else
+        VinvPrev = state[2][4]
+        tPrev = state[2][6]
+        view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
+    end
 
-#    A = view(U, 1:size(U,1), t+1:size(U,2)) # complement of im(D1)
-#    B = view(Uinv, t+1:size(Uinv,1), 1:size(Uinv,2)) # inverse of A
-#    C = if p == 0
-#        n = size(cplx, p)
-#        SparseMatrixCSC{GT}(I, n, n)
-#    else
-#        VinvPrev = state[2][4]
-#        tPrev = state[2][6]
-#        view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
-#    end # basis for cycles
-
-    Ainv,A = if p == 0
-            n = size(cplx, p)
-            SparseMatrixCSC{GT}(I,n,n),SparseMatrixCSC{GT}(I,n,n)
-        else
-            Vprev = state[2][3]
-            VinvPrev = state[2][4]
-            tPrev = state[2][6]
-            if size(Vprev,1) - tPrev+1 == 0
-                n = size(cplx, p)
-                SparseMatrixCSC{GT}(I,n,n),SparseMatrixCSC{GT}(I,n,n)
-            else
-                view(Vprev, tPrev+1:size(Vprev,1), 1:size(Vprev,2)),view(VinvPrev, 1:size(VinvPrev,1), tPrev+1:size(VinvPrev,2))
-            end
-        end
-    B = view(U, 1:size(U,1), 1:nnz(D))
-
-    P =  Ainv * B # A * (B * C) #this probably is not correct
+    P = A * (B * C)
     F = smith(P)
-    G = A * F.S[:, nnz(diagm(F))+1:end]
-    # NOTE: G is already incorrect. trouble has already started
-
+    G = F.S * diagm(F)
 
     # betti generator
     for j in 1:size(G,2)
