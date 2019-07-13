@@ -110,7 +110,7 @@ function vietorisrips(X::AbstractMatrix{T}, ɛ::Real, weights = true;
     # determine maximal dimension
     kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
 
-	return vrfromdistances(D, ϵ, weights, expansion, maxoutdim)
+	return vrfromdistances(D, ɛ, weights, expansion, maxoutdim)
 end
 
 function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true;
