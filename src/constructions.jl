@@ -103,54 +103,64 @@ function vietorisrips(X::AbstractMatrix{T}, ɛ::Real, weights = true;
                       expansion = :incremental,
                       distance  = Distances.Euclidean(),
                       maxoutdim = size(X,2)-1) where T <: Real
-    d, n = size(X)
-
-    # add zero-dimensional simplices to complex
-    splxs = map(Simplex, 1:n)
-    cplx = SimplicialComplex(splxs...)
 
     # calculate cross distances for each point in dataset
     D = Distances.pairwise(distance, X)
 
-    # build 1-skeleton (neighborhood graph)
-    E = spzeros(Bool, n, n) # adjacency matrix
-    for σ in cells(cplx, 0)
-        u = σ[:values]
-        Du = view(D, :, u)
-        edges = (LinearIndices(Du))[findall(d->d <= ɛ && d > 0., Du)]
-        length(edges) == 0 && continue
-        for i in edges
-            v = cplx[i, 0][:values]
-            s = Simplex(u...,v...)
-            if cplx[s] > size(cplx, 1)
-                # add simplex to complex
-                push!(cplx, s)
-                # fill adjacency matrix
-                E[s[:values], s[:values]] .= true
-            end
-        end
-    end
-
     # determine maximal dimension
     kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
 
-    # calculate weights of nerve
-    w = nothing
-    if weights
-        w = Dict{Int, Vector{T}}()
-        w[0] = zeros(size(cplx,0))
-        if size(cplx, 1) > 0
-            w[1] = zeros(size(cplx,1))
-            for e in cells(cplx,1)
-                w[1][e[:index]] = D[e[:values]...]
-            end
-        end
-    end
+	return vrfromdistances(D, ϵ, weights, expansion, maxoutdim)
+end
 
-    # perform expansion
-    expand(expansion, cplx, w, kmax, E)
+function vrfromdistances(D::AbstractMatrix{T}, ɛ::Real, weights = true;
+                      expansion = :incremental,
+                      maxoutdim = size(D,1)-1) where T <: Real
+	n = size(D,1)
 
-    return cplx, w
+	# add zero-dimensional simplices to complex
+	splxs = map(Simplex, 1:n)
+	cplx = SimplicialComplex(splxs...)
+
+	# determine maximal dimension
+	kmax = min(maxoutdim, maximum(mapslices(c->count(d-> 0.0 < d ≤ ɛ, c), D, dims=1)))
+
+	# build 1-skeleton (neighborhood graph)
+	E = spzeros(Bool, n, n) # adjacency matrix
+	for σ in cells(cplx, 0)
+		u = σ[:values]
+		Du = view(D, :, u)
+		edges = (LinearIndices(Du))[findall(d->d <= ɛ && d > 0., Du)]
+		length(edges) == 0 && continue
+		for i in edges
+			v = cplx[i, 0][:values]
+			s = Simplex(u...,v...)
+			if cplx[s] > size(cplx, 1)
+				# add simplex to complex
+				push!(cplx, s)
+				# fill adjacency matrix
+				E[s[:values], s[:values]] .= true
+			end
+		end
+	end
+
+	# calculate weights of nerve
+	w = nothing
+	if weights
+		w = Dict{Int, Vector{T}}()
+		w[0] = zeros(size(cplx,0))
+		if size(cplx, 1) > 0
+			w[1] = zeros(size(cplx,1))
+			for e in cells(cplx,1)
+				w[1][e[:index]] = D[e[:values]...]
+			end
+		end
+	end
+
+	# perform expansion
+	expand(expansion, cplx, w, kmax, E)
+
+	return cplx, w
 end
 
 """
@@ -376,4 +386,3 @@ function čech(X::AbstractMatrix{T}, ɛ::Real, weights = true;
     return cplx, w
 end
 const cech = čech
-
